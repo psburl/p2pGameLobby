@@ -38,32 +38,34 @@ func startElection(system *P2PSystem, peer Peer) {
 
 	fmt.Println("start disconection test to peer " + peer.Address)
 	peerJSON, _ := json.Marshal(peer)
-	var list []int
-	list = append(list, 0)
+	// starts with one 0 representing that current peer could not connect to destination
+	neighboorsResponses := []int{0}
+
 	for _, neighboor := range system.Peers {
 		if neighboor.Address != system.Self.Address && neighboor.Address != peer.Address {
 			url := "http://" + neighboor.Address + "/disconnectionTest"
-			resp, err := http.Post(url, "application/json", bytes.NewBuffer(peerJSON))
+			response, err := http.Post(url, "application/json", bytes.NewBuffer(peerJSON))
+
 			if err != nil {
-				list = append(list, 0)
+				neighboorsResponses = append(neighboorsResponses, 0)
 			} else {
-				defer resp.Body.Close()
-				var strResp string
-				dec := json.NewDecoder(resp.Body)
-				err = dec.Decode(&strResp)
-				if strResp == "ok" {
-					list = append(list, 1)
+				defer response.Body.Close()
+				var neighboorResponse string
+				decoder := json.NewDecoder(response.Body)
+				err = decoder.Decode(&neighboorResponse)
+				if neighboorResponse == "ok" {
+					neighboorsResponses = append(neighboorsResponses, 1)
 				} else {
-					list = append(list, 0)
+					neighboorsResponses = append(neighboorsResponses, 0)
 				}
 			}
 		}
 	}
-	total := 0
-	for _, el := range list {
-		total = total + el
+	totalSuccessResponses := 0
+	for _, responseByNeighboor := range neighboorsResponses {
+		totalSuccessResponses = totalSuccessResponses + responseByNeighboor
 	}
-	if len(list)*2.0/3.0 >= total {
+	if len(neighboorsResponses)*2.0/3.0 >= totalSuccessResponses {
 		delete(system.Peers, peer.Address)
 		fmt.Printf("Peer diconnected")
 	}
