@@ -60,73 +60,22 @@ func (system *P2PSystem) StartStdinListener(sender Peer) {
 // ReceivePeerJoin Receives the join of new peer
 func (system *P2PSystem) ReceivePeerJoin(peer Peer) {
 	system.peerJoin <- peer
-
 }
 
 func (system *P2PSystem) startListenerSelectLoop() {
 	for {
 		select {
 		case peer := <-system.peerJoin:
-			if !system.knownPeer(peer) {
-				fmt.Printf("# Connected to: %s \n", peer.Address)
-				system.Peers[peer.Address] = peer
-				go system.sendJoin(peer)
-			}
-
+			peerJoinEventHandler(system, peer)
 		case <-system.getCurrentPeers:
-			system.currentPeers <- system.Peers
-
+			getCurrentPeersEventHandler(system)
+		case message := <-system.userMsg:
+			userMessageEventHandler(system, message)
+		case message := <-system.receivedMsg:
+			receiveMessageEventHandler(system, message)
 		case peer := <-system.peerLeft:
-			go system.startElection(peer)
-
-		case messageMsg := <-system.receivedMsg:
-			fmt.Printf("%s writes: %s\n", messageMsg.SourcePeer.Name, messageMsg.Message)
-
-		case messageMsg := <-system.userMsg:
-			fmt.Printf("%s (self) says: %s\n", messageMsg.SourcePeer.Name, messageMsg.Message)
-			for _, peer := range system.Peers {
-				go system.sendMessage(peer, messageMsg)
-			}
+			peerLeftEventHandler(system, peer)
 		}
-	}
-}
-
-func (system *P2PSystem) startElection(peer Peer) {
-
-	fmt.Println("start disconection test to peer " + peer.Address)
-	peerJSON, _ := json.Marshal(peer)
-	var list []int
-	list = append(list, 0)
-	for _, neighboor := range system.Peers {
-
-		if neighboor.Address != system.Self.Address && neighboor.Address != peer.Address {
-
-			url := "http://" + neighboor.Address + "/disconnectionTest"
-			resp, err := http.Post(url, "application/json", bytes.NewBuffer(peerJSON))
-			if err != nil {
-				list = append(list, 0)
-			} else {
-				defer resp.Body.Close()
-				var strResp string
-				dec := json.NewDecoder(resp.Body)
-				err = dec.Decode(&strResp)
-				if strResp == "ok" {
-					list = append(list, 1)
-				} else {
-					list = append(list, 0)
-				}
-			}
-		}
-	}
-
-	total := 0
-	for _, el := range list {
-		total = total + el
-	}
-
-	if len(list)*2.0/3.0 >= total {
-		delete(system.Peers, peer.Address)
-		fmt.Printf("Peer diconnected")
 	}
 }
 
@@ -146,64 +95,6 @@ func (system *P2PSystem) sendJoin(peer Peer) {
 	err = dec.Decode(&otherPeers)
 	for _, peer := range otherPeers {
 		system.peerJoin <- peer
-	}
-}
-
-func createJoinHandler(system *P2PSystem) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		joiner := Peer{}
-		dec := json.NewDecoder(r.Body)
-		err := dec.Decode(&joiner)
-		if err != nil {
-			log.Printf("Error unmarshalling from: %v", err)
-		}
-		system.peerJoin <- joiner
-		system.getCurrentPeers <- true
-		enc := json.NewEncoder(w)
-		enc.Encode(<-system.currentPeers)
-	}
-}
-
-func createMessageHandler(system *P2PSystem) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		cm := P2PMessage{}
-		dec := json.NewDecoder(r.Body)
-		err := dec.Decode(&cm)
-		if err != nil {
-			log.Printf("Error unmarshalling from: %v", err)
-		}
-		system.receivedMsg <- cm
-	}
-}
-
-func getKnownPeersHandler(system *P2PSystem) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var list []Peer
-		for _, peer := range system.Peers {
-			list = append(list, peer)
-		}
-		json, _ := json.Marshal(list)
-		fmt.Fprint(w, string(json))
-	}
-}
-
-func disconnectionTest(system *P2PSystem) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		dcPeer := Peer{}
-		dec := json.NewDecoder(r.Body)
-		err := dec.Decode(&dcPeer)
-		URL := "http://" + dcPeer.Address + "/ping"
-		_, err = http.Get(URL)
-		if err != nil {
-			fmt.Fprintf(w, "error")
-		}
-		fmt.Fprintf(w, "ok")
-	}
-}
-
-func ping(system *P2PSystem) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "")
 	}
 }
 
