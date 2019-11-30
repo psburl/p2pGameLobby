@@ -36,6 +36,10 @@ func peerLeftEventHandler(system *P2PSystem, peer Peer) {
 
 func startElection(system *P2PSystem, peer Peer) {
 
+	if system.knownPeer(peer) == false {
+		return
+	}
+
 	fmt.Println("start disconection test to peer " + peer.Address)
 	peerJSON, _ := json.Marshal(peer)
 	// starts with one 0 representing that current peer could not connect to destination
@@ -43,11 +47,13 @@ func startElection(system *P2PSystem, peer Peer) {
 
 	for _, neighboor := range system.Peers {
 		if neighboor.Address != system.Self.Address && neighboor.Address != peer.Address {
+
 			url := "http://" + neighboor.Address + "/disconnectionTest"
 			response, err := http.Post(url, "application/json", bytes.NewBuffer(peerJSON))
 
 			if err != nil {
 				neighboorsResponses = append(neighboorsResponses, 0)
+				system.ReceivePeerLeft(neighboor)
 			} else {
 				defer response.Body.Close()
 				var neighboorResponse string
@@ -66,7 +72,9 @@ func startElection(system *P2PSystem, peer Peer) {
 		totalSuccessResponses = totalSuccessResponses + responseByNeighboor
 	}
 	if len(neighboorsResponses)*2.0/3.0 >= totalSuccessResponses {
-		delete(system.Peers, peer.Address)
-		fmt.Printf("Peer diconnected")
+		if system.knownPeer(peer) {
+			delete(system.Peers, peer.Address)
+			fmt.Println("Peer " + peer.Address + " diconnected")
+		}
 	}
 }

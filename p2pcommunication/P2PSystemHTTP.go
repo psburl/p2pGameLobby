@@ -54,6 +54,10 @@ func disconnectionTest(system *P2PSystem) func(http.ResponseWriter, *http.Reques
 		_, err = http.Get(URL)
 		if err != nil {
 			fmt.Fprintf(writer, "error")
+			_, connected := system.Peers[disconnectedPeer.Address]
+			if connected {
+				system.ReceivePeerLeft(disconnectedPeer)
+			}
 		}
 		fmt.Fprintf(writer, "ok")
 	}

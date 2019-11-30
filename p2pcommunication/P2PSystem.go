@@ -62,6 +62,10 @@ func (system *P2PSystem) ReceivePeerJoin(peer Peer) {
 	system.peerJoin <- peer
 }
 
+func (system *P2PSystem) ReceivePeerLeft(peer Peer) {
+	system.peerLeft <- peer
+}
+
 func (system *P2PSystem) startListenerSelectLoop() {
 	for {
 		select {
@@ -84,10 +88,9 @@ func (system *P2PSystem) sendJoin(peer Peer) {
 	qs, _ := json.Marshal(system.Self)
 	resp, err := http.Post(URL, "application/json", bytes.NewBuffer(qs))
 	if err != nil {
-		system.peerLeft <- peer
+		system.ReceivePeerLeft(peer)
 		return
 	}
-
 	system.peerJoin <- peer
 	defer resp.Body.Close()
 	otherPeers := Peers{}
@@ -111,7 +114,7 @@ func (system *P2PSystem) sendMessage(peer Peer, msg P2PMessage) {
 	qs, _ := json.Marshal(msg)
 	_, err := http.Post(URL, "application/json", bytes.NewBuffer(qs))
 	if err != nil {
-		system.peerLeft <- peer
+		system.ReceivePeerLeft(peer)
 		return
 	}
 }
@@ -121,6 +124,6 @@ func (system *P2PSystem) startWebListener() {
 	http.HandleFunc("/join", createJoinHandler(system))
 	http.HandleFunc("/peers", getKnownPeersHandler(system))
 	http.HandleFunc("/ping", ping(system))
-	http.HandleFunc("/disconnectionText", disconnectionTest(system))
+	http.HandleFunc("/disconnectionTest", disconnectionTest(system))
 	log.Fatal(http.ListenAndServe(system.Self.Address, nil))
 }
