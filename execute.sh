@@ -1,0 +1,1 @@
+docker-compose run chat go run main.go $@
